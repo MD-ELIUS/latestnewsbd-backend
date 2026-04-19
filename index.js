@@ -86,7 +86,7 @@ async function run() {
         console.log("🚀 Starting notification process...");
         
         // 1. Calculate the time 10 minutes ago
-        const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
+        const tenMinutesAgo = new Date(Date.now() - 20* 60 * 1000);
         
         // 2. Fetch news from the last 10 minutes
         const recentNews = await newsCollection.find({
@@ -122,18 +122,11 @@ async function run() {
         // 4. Send notifications for each news item
         for (const news of recentNews) {
           const message = {
-            notification: {
-              title: news.title,
-              body: String(news.description).substring(0, 100) + (String(news.description).length > 100 ? '...' : ''),
-              image: news.imageCloudinary || news.image,
-            },
             data: {
+              title: String(news.title),
+              body: String(news.description).substring(0, 100) + (String(news.description).length > 100 ? '...' : ''),
+              image: String(news.imageCloudinary || news.image),
               url: `https://latestnewsbd.vercel.app/news/${news.slug}`
-            },
-            webpush: {
-              fcmOptions: {
-                link: `https://latestnewsbd.vercel.app/news/${news.slug}` // 🔥 Native mobile clicking
-              }
             },
             tokens: tokens,
           };
