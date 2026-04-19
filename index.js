@@ -86,7 +86,7 @@ async function run() {
         console.log("🚀 Starting notification process...");
 
         // 1. Calculate the time 10 minutes ago
-        const tenMinutesAgo = new Date(Date.now() - 40 * 60 * 1000);
+        const tenMinutesAgo = new Date(Date.now() - 60 * 60 * 1000);
 
         // 2. Fetch news from the last 10 minutes (Limit to 3 to avoid multiple notifications)
         const recentNews = await newsCollection.find({
