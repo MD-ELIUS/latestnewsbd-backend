@@ -122,12 +122,10 @@ async function run() {
         // 4. Send notifications for each news item
         for (const news of recentNews) {
           const message = {
-            notification: {
+            data: {
               title: news.title,
               body: news.description.substring(0, 100) + (news.description.length > 100 ? '...' : ''),
               image: news.imageCloudinary || news.image,
-            },
-            data: {
               url: `https://latestnewsbd.vercel.app/news/${news.slug}`
             },
             tokens: tokens,
