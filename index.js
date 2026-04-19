@@ -88,16 +88,16 @@ async function run() {
         // 1. Calculate the time 10 minutes ago
         const tenMinutesAgo = new Date(Date.now() - 40 * 60 * 1000);
 
-        // 2. Fetch news from the last 10 minutes (Limit to 1 to avoid multiple notifications)
+        // 2. Fetch news from the last 10 minutes (Limit to 3 to avoid multiple notifications)
         const recentNews = await newsCollection.find({
           createdAt: { $gte: tenMinutesAgo.toISOString() }
-        }).sort({ createdAt: -1 }).limit(1).toArray();
+        }).sort({ createdAt: -1 }).limit(3).toArray();
 
         // Fallback for Date objects if stored as Date
         if (recentNews.length === 0) {
           const recentNewsDate = await newsCollection.find({
             createdAt: { $gte: tenMinutesAgo }
-          }).sort({ createdAt: -1 }).limit(1).toArray();
+          }).sort({ createdAt: -1 }).limit(3).toArray();
           if (recentNewsDate.length > 0) recentNews.push(...recentNewsDate);
         }
 
