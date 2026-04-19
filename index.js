@@ -55,13 +55,13 @@ async function run() {
       try {
         const result = await tokenCollection.updateOne(
           { token: token },
-          { 
-            $set: { 
+          {
+            $set: {
               token: token,
-              updatedAt: new Date() 
+              updatedAt: new Date()
             },
-            $setOnInsert: { 
-              createdAt: new Date() 
+            $setOnInsert: {
+              createdAt: new Date()
             }
           },
           { upsert: true }
@@ -84,10 +84,10 @@ async function run() {
     app.get('/api/send-news-notifications', async (req, res) => {
       try {
         console.log("🚀 Starting notification process...");
-        
+
         // 1. Calculate the time 10 minutes ago
-        const tenMinutesAgo = new Date(Date.now() - 20* 60 * 1000);
-        
+        const tenMinutesAgo = new Date(Date.now() - 40 * 60 * 1000);
+
         // 2. Fetch news from the last 10 minutes
         const recentNews = await newsCollection.find({
           createdAt: { $gte: tenMinutesAgo.toISOString() }
@@ -95,7 +95,7 @@ async function run() {
 
         // Fallback for Date objects if stored as Date
         if (recentNews.length === 0) {
-           const recentNewsDate = await newsCollection.find({
+          const recentNewsDate = await newsCollection.find({
             createdAt: { $gte: tenMinutesAgo }
           }).sort({ createdAt: -1 }).toArray();
           if (recentNewsDate.length > 0) recentNews.push(...recentNewsDate);
@@ -124,23 +124,21 @@ async function run() {
           const message = {
             data: {
               title: String(news.title),
-              body: String(news.description).substring(0, 100) + (String(news.description).length > 100 ? '...' : ''),
-              image: String(news.imageCloudinary || news.image),
               url: `https://latestnewsbd.vercel.app/news/${news.slug}`
             },
             tokens: tokens,
           };
 
           const response = await admin.messaging().sendEachForMulticast(message);
-          
+
           // 5. Cleanup inactive tokens
           if (response.failureCount > 0) {
             const failedTokens = [];
             response.responses.forEach((resp, idx) => {
               if (!resp.success) {
                 const errorCode = resp.error.code;
-                if (errorCode === 'messaging/registration-token-not-registered' || 
-                    errorCode === 'messaging/invalid-registration-token') {
+                if (errorCode === 'messaging/registration-token-not-registered' ||
+                  errorCode === 'messaging/invalid-registration-token') {
                   failedTokens.push(tokens[idx]);
                 }
               }
@@ -151,7 +149,7 @@ async function run() {
               console.log(`🧹 Cleaned up ${failedTokens.length} inactive tokens.`);
             }
           }
-          
+
           results.push({
             newsId: news._id,
             successCount: response.successCount,
@@ -159,11 +157,11 @@ async function run() {
           });
         }
 
-        res.status(200).send({ 
-          message: 'Notifications processed', 
+        res.status(200).send({
+          message: 'Notifications processed',
           newsCount: recentNews.length,
           tokensCount: tokens.length,
-          details: results 
+          details: results
         });
 
       } catch (err) {
