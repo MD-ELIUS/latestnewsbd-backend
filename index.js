@@ -88,16 +88,16 @@ async function run() {
         // 1. Calculate the time 10 minutes ago
         const tenMinutesAgo = new Date(Date.now() - 40 * 60 * 1000);
 
-        // 2. Fetch news from the last 10 minutes
+        // 2. Fetch news from the last 10 minutes (Limit to 1 to avoid multiple notifications)
         const recentNews = await newsCollection.find({
           createdAt: { $gte: tenMinutesAgo.toISOString() }
-        }).sort({ createdAt: -1 }).toArray();
+        }).sort({ createdAt: -1 }).limit(1).toArray();
 
         // Fallback for Date objects if stored as Date
         if (recentNews.length === 0) {
           const recentNewsDate = await newsCollection.find({
             createdAt: { $gte: tenMinutesAgo }
-          }).sort({ createdAt: -1 }).toArray();
+          }).sort({ createdAt: -1 }).limit(1).toArray();
           if (recentNewsDate.length > 0) recentNews.push(...recentNewsDate);
         }
 
@@ -124,6 +124,8 @@ async function run() {
           const message = {
             data: {
               title: String(news.title),
+              body: String(news.description).substring(0, 100) + (String(news.description).length > 100 ? '...' : ''),
+              image: String(news.imageCloudinary || news.image),
               url: `https://latestnewsbd.vercel.app/news/${news.slug}`
             },
             tokens: tokens,
