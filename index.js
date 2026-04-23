@@ -3,6 +3,15 @@ const { MongoClient } = require('mongodb');
 const cors = require('cors');
 require('dotenv').config();
 const admin = require('firebase-admin');
+const dayjs = require('dayjs');
+const utc = require('dayjs/plugin/utc');
+const timezone = require('dayjs/plugin/timezone');
+const { notifyGoogleIndexing } = require('./googleIndexing');
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
+
+const BD_TZ = 'Asia/Dhaka';
 
 let serviceAccount;
 try {
@@ -169,6 +178,169 @@ async function run() {
       } catch (err) {
         console.error("❌ Error sending notifications:", err);
         res.status(500).send({ error: 'Failed to send notifications' });
+      }
+    });
+
+    // === NEW ROUTES MIGRATED FROM NEXT.JS === //
+
+    // 1. GET /api/news/most-read
+    app.get('/api/news/most-read', async (req, res) => {
+      const page = parseInt(req.query.page || '1', 10);
+      const limit = parseInt(req.query.limit || '12', 10);
+      const category = req.query.category || null;
+
+      try {
+        const query = {};
+        if (category && String(category).trim()) {
+          query.category = category;
+        }
+
+        const total = await newsCollection.countDocuments(query);
+        const news = await newsCollection
+          .find(query)
+          .sort({ viewCount: -1 })
+          .skip((page - 1) * limit)
+          .limit(limit)
+          .toArray();
+
+        res.status(200).json({ news, total, page, limit });
+      } catch (err) {
+        console.error('[API/news/most-read]', err);
+        res.status(500).json({ error: 'Failed to fetch most-read news' });
+      }
+    });
+
+    // 2. GET /api/news/search
+    app.get('/api/news/search', async (req, res) => {
+      const query = req.query.q || '';
+      const limit = parseInt(req.query.limit || '20', 10);
+
+      if (!query) return res.status(200).json({ news: [] });
+
+      try {
+        const news = await newsCollection
+          .find({
+            $or: [
+              { title: { $regex: query, $options: 'i' } },
+              { description: { $regex: query, $options: 'i' } },
+              { tags: { $regex: query, $options: 'i' } },
+            ],
+          })
+          .sort({ sourceTime: -1, createdAt: -1 })
+          .limit(limit)
+          .toArray();
+
+        res.status(200).json({ news });
+      } catch (err) {
+        console.error('[API/news/search]', err);
+        res.status(500).json({ news: [], error: 'Search failed' });
+      }
+    });
+
+    // 3. GET /api/news/trending
+    app.get('/api/news/trending', async (req, res) => {
+      const limit = parseInt(req.query.limit || '5', 10);
+
+      try {
+        const news = await newsCollection
+          .find({})
+          .sort({ viewCount: -1 })
+          .limit(limit)
+          .toArray();
+
+        res.status(200).json({ news });
+      } catch (err) {
+        console.error('[API/news/trending]', err);
+        res.status(500).json({ error: 'Failed to fetch trending news' });
+      }
+    });
+
+    // 4. POST /api/news/indexing
+    app.post('/api/news/indexing', async (req, res) => {
+      try {
+        const { url, key } = req.body;
+
+        const INDEXING_KEY = process.env.INDEXING_KEY || 'your_secret_indexing_key';
+        if (key !== INDEXING_KEY) {
+          return res.status(401).json({ error: 'Unauthorized' });
+        }
+
+        if (!url) {
+          return res.status(400).json({ error: 'URL is required' });
+        }
+
+        const result = await notifyGoogleIndexing(url);
+
+        res.status(200).json({ 
+          success: true, 
+          message: 'Indexing notification sent to Google',
+          data: result 
+        });
+
+      } catch (err) {
+        console.error('[API/Indexing Error]', err);
+        res.status(500).json({ error: 'Internal Server Error', details: err.message });
+      }
+    });
+
+    // 5. GET /api/news
+    app.get('/api/news', async (req, res) => {
+      const page = parseInt(req.query.page || '1', 10);
+      const limit = parseInt(req.query.limit || '10', 10);
+      const date = req.query.date || null;
+      const category = req.query.category || null;
+      const subcategory = req.query.subcategory || req.query.sub || null;
+
+      try {
+        const query = {};
+        if (date) {
+          const bdStartOfDay = dayjs.tz(date, BD_TZ).startOf('day');
+          const startStr = bdStartOfDay.toISOString();
+          const endStr = bdStartOfDay.endOf('day').toISOString();
+
+          query.$or = [
+            { sourceTime: { $gte: startStr, $lte: endStr } },
+            { 
+              $and: [
+                { $or: [{ sourceTime: { $exists: false } }, { sourceTime: null }] },
+                { createdAt: { $gte: startStr, $lte: endStr } }
+              ] 
+            }
+          ];
+        }
+        if (category) query.category = category;
+        if (subcategory) query.subcategory = subcategory;
+
+        const total = await newsCollection.countDocuments(query);
+        const news = await newsCollection
+          .find(query)
+          .sort({ sourceTime: -1, createdAt: -1 })
+          .skip((page - 1) * limit)
+          .limit(limit)
+          .toArray();
+
+        res.status(200).json({ news, total, page, limit });
+      } catch (err) {
+        console.error('[API/news]', err);
+        res.status(500).json({ error: 'Failed to fetch news', details: err.message });
+      }
+    });
+
+    // 6. GET /api/news/:slug (Must be last)
+    app.get('/api/news/:slug', async (req, res) => {
+      const { slug } = req.params;
+
+      try {
+        const news = await newsCollection.findOne({ slug });
+        if (!news) return res.status(404).json({ error: 'News not found' });
+
+        // Increment view count asynchronously
+        newsCollection.updateOne({ slug }, { $inc: { viewCount: 1 } }).catch(console.error);
+
+        res.status(200).json({ news });
+      } catch (err) {
+        console.error('[API/news/slug]', err);
+        res.status(500).json({ error: 'Failed to fetch news article' });
       }
     });
 
